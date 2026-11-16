@@ -96,7 +96,7 @@ jobs:
       # Restoring the previous run's criterion directory is what lets criterion print
       # its "vs previous run" change column; without it every run is a first run.
       - name: Restore previous benchmark baseline
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: criterion-home
           key: criterion-${{ github.ref_name }}-${{ github.sha }}
