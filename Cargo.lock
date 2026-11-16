@@ -987,7 +987,7 @@ dependencies = [
 
 [[package]]
 name = "fulcrum"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "fx-core",
  "fx-fs",
@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "fx-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -1086,7 +1086,7 @@ dependencies = [
 
 [[package]]
 name = "fx-fs"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64 0.23.1",
  "fx-core",
@@ -1102,7 +1102,7 @@ dependencies = [
 
 [[package]]
 name = "fx-helper"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "fx-core",
  "fx-index",
@@ -1114,7 +1114,7 @@ dependencies = [
 
 [[package]]
 name = "fx-index"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "criterion",
  "fx-core",

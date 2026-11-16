@@ -855,7 +855,7 @@ function defaultSettings(): Settings {
     appearance: {
       accent: "Purple",
       density: "Normal",
-      acrylic: true,
+      acrylic: false,
       animations: true,
       font_size: 13,
     },

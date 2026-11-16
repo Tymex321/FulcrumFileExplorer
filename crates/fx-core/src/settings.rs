@@ -56,7 +56,8 @@ pub enum PaneLayout {
 pub struct Appearance {
     pub accent: Accent,
     pub density: Density,
-    /// Translucent window background where the OS supports it.
+    /// Translucent window background where the OS supports it. Off by default: the blur
+    /// makes moving the window laggy, and it only shows through a transparent window.
     pub acrylic: bool,
     /// Honour the OS "reduce motion" setting; when false, animations are suppressed.
     pub animations: bool,
@@ -68,7 +69,7 @@ impl Default for Appearance {
         Self {
             accent: Accent::default(),
             density: Density::default(),
-            acrylic: true,
+            acrylic: false,
             animations: true,
             font_size: 13,
         }

@@ -4,6 +4,16 @@ All notable changes to Fulcrum are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-16
+
+### Fixed
+
+- **Moving the window was slow and laggy.** The window had a translucent "acrylic" blur
+  effect that Windows re-renders on every frame while the window moves, and the effect was
+  never visible because the window background is solid. It is now off by default, and only
+  applies if the window is actually transparent. Existing settings that had it switched on
+  no longer trigger it.
+
 ## [1.0.0] - 2026-11-16
 
 The first public release of Fulcrum, a fast file explorer for Windows.
