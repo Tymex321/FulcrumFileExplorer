@@ -450,8 +450,24 @@ mod tests {
         fs::create_dir(d.path().join("zdir")).unwrap();
         fs::write(d.path().join("a.txt"), b"hello").unwrap();
         fs::write(d.path().join("b.rs"), b"fn main() {}").unwrap();
-        fs::write(d.path().join(".hidden"), b"x").unwrap();
+        let hidden = d.path().join(".hidden");
+        fs::write(&hidden, b"x").unwrap();
+        mark_hidden(&hidden);
         d
+    }
+
+    /// Unix hides dotfiles by name, so `.hidden` already is. Windows hides by attribute.
+    #[cfg(unix)]
+    fn mark_hidden(_path: &Path) {}
+
+    #[cfg(windows)]
+    fn mark_hidden(path: &Path) {
+        use windows::core::HSTRING;
+        use windows::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN};
+        // SAFETY: the HSTRING outlives the call and the attribute constant is a plain flag.
+        #[allow(unsafe_code)]
+        unsafe { SetFileAttributesW(&HSTRING::from(path.as_os_str()), FILE_ATTRIBUTE_HIDDEN) }
+            .unwrap();
     }
 
     fn names(entries: &[FileEntry]) -> Vec<&str> {
