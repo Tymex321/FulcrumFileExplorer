@@ -26,6 +26,14 @@ errors="$(awk '
   show { print }
   /^$/ { show = 0 }
 ' "$log")"
+# A failing `cargo test` prints one "---- <name> stdout ----" block per test, with blank
+# lines inside, ending at the "failures:" list. Keep the first 5 of those too.
+tests="$(awk '
+  /^---- .* stdout ----$/ { n++; on = (n <= 5) }
+  /^failures:$/ { on = 0 }
+  on { print }
+' "$log")"
+[ -n "$tests" ] && errors="${tests}"$'\n'"${errors}"
 [ -z "$errors" ] && errors="$(tail -n 40 "$log")"
 
 {
@@ -43,6 +51,21 @@ echo "$errors" | grep -E '^\s+--> ' | head -n 10 | while read -r _ loc; do
   rest="${loc#*:}"
   echo "::error file=${file},line=${rest%%:*},title=${title}::see job summary"
 done
+
+# One annotation per failed test, carrying its output, so the failure is readable from the
+# run's front page without opening the log. Each test block is joined onto one line with
+# \x1f, which becomes the %0A newline escape that workflow commands require.
+if [ -n "$tests" ]; then
+  printf '%s\n' "$tests" |
+    awk '/^---- .* stdout ----$/ { if (b) print b; b = $0; next } { b = b "\037" $0 } END { if (b) print b }' |
+    while IFS= read -r block; do
+      msg="${block:0:3000}"
+      msg="${msg//'%'/%25}"
+      msg="${msg//$'\r'/%0D}"
+      msg="${msg//$'\037'/%0A}"
+      echo "::error title=${title}::${msg}"
+    done
+fi
 
 rm -f "$log"
 exit "$status"
