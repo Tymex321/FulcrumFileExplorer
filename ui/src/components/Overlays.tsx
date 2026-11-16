@@ -87,16 +87,24 @@ function PaletteDialog({ initial }: { initial: "files" | "commands" }) {
             offset: 0,
             match_full_path: false,
           },
+          // Batches travel on a separate channel from the call's own response and can land
+          // after it resolves, so each one must update state itself. Copying matters:
+          // React skips the render if handed the same array it already holds.
           (batch) => {
-            if (g === gen.current) got.push(...batch);
+            if (g !== gen.current) return;
+            got.push(...batch);
+            setHits(got.slice());
           },
         );
         if (g !== gen.current) return;
-        setHits(got);
+        setHits(got.slice());
         setSummary(sum);
         setActive(0);
       } catch {
-        if (g === gen.current) setHits([]);
+        if (g === gen.current) {
+          setHits([]);
+          setSummary(null); // never show the previous query's match count beside an empty list
+        }
       }
     }, 40);
     return () => clearTimeout(t);

@@ -13,6 +13,10 @@ All notable changes to Fulcrum are documented here. The format follows
   never visible because the window background is solid. It is now off by default, and only
   applies if the window is actually transparent. Existing settings that had it switched on
   no longer trigger it.
+- **"Go to file" (Ctrl+P) could show "No matches" while its footer counted matches.** The
+  results were being received but not drawn until you typed or deleted a character. They
+  now appear as soon as they arrive, and a failed search no longer leaves the previous
+  query's match count on screen.
 
 ## [1.0.0] - 2026-11-16
 
