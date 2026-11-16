@@ -52,7 +52,9 @@ enum Kind {
     Regex(regex::Regex),
     /// The anchored regex, plus a literal every match must contain (see
     /// [`glob_literal`]) for the arena fast path.
-    Glob(regex::Regex, Option<memmem::Finder<'static>>),
+    /// The finder is boxed: on x86_64 Windows it is ~300 bytes of SIMD state, which would
+    /// otherwise make every `Kind` that large.
+    Glob(regex::Regex, Option<Box<memmem::Finder<'static>>>),
 }
 
 /// A compiled query: everything derivable from a [`Query`] once, hoisted out of the
@@ -159,7 +161,7 @@ impl Matcher {
                 MatchMode::Glob => Kind::Glob(
                     build_regex(&glob_to_regex(text), case_sensitive)?,
                     glob_literal(text, case_sensitive)
-                        .map(|l| memmem::Finder::new(l.as_bytes()).into_owned()),
+                        .map(|l| Box::new(memmem::Finder::new(l.as_bytes()).into_owned())),
                 ),
             }
         };
@@ -205,7 +207,7 @@ impl Matcher {
         }
         match &self.kind {
             Kind::Substring(terms) => terms.iter().max_by_key(|f| f.needle().len()),
-            Kind::Glob(_, lit) => lit.as_ref(),
+            Kind::Glob(_, lit) => lit.as_deref(),
             _ => None,
         }
     }
