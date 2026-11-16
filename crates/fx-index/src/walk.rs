@@ -766,7 +766,22 @@ mod tests {
         fs::write(p.join("src/main.rs"), b"fn main() {}").unwrap();
         fs::write(p.join("node_modules/pkg/index.js"), b"").unwrap();
         fs::write(p.join(".hidden"), b"").unwrap();
+        mark_hidden(&p.join(".hidden"));
         t
+    }
+
+    /// Unix hides dotfiles by name, so `.hidden` already is. Windows hides by attribute.
+    #[cfg(unix)]
+    fn mark_hidden(_path: &Path) {}
+
+    #[cfg(windows)]
+    fn mark_hidden(path: &Path) {
+        use windows::core::HSTRING;
+        use windows::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN};
+        // SAFETY: the HSTRING outlives the call and the attribute constant is a plain flag.
+        #[allow(unsafe_code)]
+        unsafe { SetFileAttributesW(&HSTRING::from(path.as_os_str()), FILE_ATTRIBUTE_HIDDEN) }
+            .unwrap();
     }
 
     fn query(ix: &WalkIndex, text: &str) -> Vec<SearchHit> {
