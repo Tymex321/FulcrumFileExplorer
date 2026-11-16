@@ -1,0 +1,119 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # Manual runs build the installer and upload it as a workflow artifact without
+  # publishing a release, which is how to try the packaging without cutting a tag.
+  workflow_dispatch:
+
+permissions:
+  contents: write # creating the release and uploading the installer
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: release
+          # Keep the installed tauri-cli binary in the cache so it is not rebuilt per tag.
+          cache-bin: true
+
+      - name: Install tauri-cli
+        run: |
+          if ! cargo tauri --version >/dev/null 2>&1; then
+            cargo install tauri-cli --version '^2' --locked
+          fi
+
+      - name: Read version
+        id: version
+        run: |
+          version=$(node -p "require('./src-tauri/tauri.conf.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match tauri.conf.json version $version"
+            exit 1
+          fi
+
+      - name: UI install
+        working-directory: ui
+        run: npm ci
+
+      # The release overlay builds fx-helper.exe first and bundles it beside the app.
+      - name: Build installer
+        run: cargo tauri build --ci --config src-tauri/tauri.release.conf.json --bundles nsis
+
+      # The embedded manifest is plain XML inside the exe, so a byte grep is enough to
+      # prove the app never forces elevation (privilege lives in fx-helper only).
+      - name: Verify the app manifest requests asInvoker
+        run: |
+          exe=target/release/fulcrum.exe
+          test -f "$exe" || { echo "::error::$exe not found"; exit 1; }
+          grep -aq 'requestedExecutionLevel[^>]*asInvoker' "$exe" \
+            || { echo "::error::$exe does not embed requestedExecutionLevel asInvoker"; exit 1; }
+          echo "manifest: asInvoker"
+
+      - name: Name and verify the installer
+        id: installer
+        run: |
+          shopt -s nullglob
+          built=(target/release/bundle/nsis/*-setup.exe)
+          [ "${#built[@]}" -eq 1 ] || { echo "::error::expected one NSIS installer, found ${#built[@]}"; exit 1; }
+          mkdir -p dist
+          out="dist/Fulcrum-Setup-${{ steps.version.outputs.version }}-x64.exe"
+          cp "${built[0]}" "$out"
+          # The installer must carry both executables.
+          listing=$(7z l "$out")
+          echo "$listing"
+          for f in fulcrum.exe fx-helper.exe; do
+            grep -qi "$f" <<<"$listing" || { echo "::error::$f is missing from the installer"; exit 1; }
+          done
+          (cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
+          ls -l dist
+
+      - name: Upload installer as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: fulcrum-windows-installer
+          if-no-files-found: error
+          path: dist/*
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::release $TAG already exists; refusing to overwrite it"
+            exit 1
+          fi
+          # The release notes are the matching section of CHANGELOG.md.
+          awk -v v="${TAG#v}" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
+          gh release create "$TAG" dist/* \
+            --title "Fulcrum $TAG" \
+            --notes-file notes.md \
+            --verify-tag

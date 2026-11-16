@@ -1,0 +1,35 @@
+[package]
+name = "fx-index"
+description = "File index: NTFS MFT + USN journal on Windows, directory walking elsewhere."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fx-core.workspace = true
+parking_lot.workspace = true
+tracing.workspace = true
+rayon.workspace = true
+nucleo.workspace = true
+regex.workspace = true
+memchr.workspace = true
+walkdir.workspace = true
+notify.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+ntfs-reader.workspace = true
+windows.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+
+[[bench]]
+name = "query"
+harness = false
+
+[lints]
+workspace = true

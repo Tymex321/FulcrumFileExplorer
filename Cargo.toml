@@ -1,0 +1,104 @@
+[workspace]
+resolver = "2"
+members = ["crates/fx-core", "crates/fx-index", "crates/fx-fs", "crates/fx-helper", "src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.90"
+license = "MIT"
+repository = "https://github.com/Tymex321/FulcrumFileExplorer"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+# Denied because each one is a real latency or correctness hazard in this codebase.
+# `unwrap` in particular: a panic inside a Tauri command takes down the whole webview.
+unwrap_used = "warn"
+needless_collect = "warn"
+redundant_clone = "warn"
+
+# Single source of truth for dependency versions. Crates reference these with
+# `dep.workspace = true` rather than pinning their own versions.
+[workspace.dependencies]
+fx-core = { path = "crates/fx-core" }
+fx-index = { path = "crates/fx-index" }
+fx-fs = { path = "crates/fx-fs" }
+
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+thiserror = "2.0.21"
+ts-rs = "12.0.1"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "sync", "time", "macros", "io-util"] }
+rayon = "1.12.0"
+parking_lot = "0.12"
+
+walkdir = "2.5.0"
+notify = "8.2.2"
+nucleo = "0.5.0"
+regex = "1"
+# fx-index: SIMD substring search over the name arena (already in the lock via regex).
+memchr = "2"
+trash = "5.3.0"
+
+tauri = "2.12"
+tauri-build = "2"
+criterion = "0.8.2"
+tempfile = "3"
+
+# fx-fs: thumbnail cache keys, PNG encoding of shell bitmaps, and the base64 transport
+# encoding of `Thumbnail`.
+sha2 = "0.10.9"
+png = "0.18.1"
+base64 = "0.23.1"
+
+[workspace.dependencies.windows]
+version = "0.62.2"
+features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_System_Com",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_Security",
+    "Win32_System_Threading",
+    "Win32_System_Pipes",
+    "Win32_Graphics_Gdi",
+]
+
+[workspace.dependencies.ntfs-reader]
+version = "0.6.0"
+
+# fx-helper: Service Control Manager integration for the elevated index service.
+[workspace.dependencies.windows-service]
+version = "0.8.1"
+
+[profile.release]
+# A file explorer lives or dies on latency. Full LTO + one codegen unit is worth the
+# slower build; panic=abort keeps the binary small since we never unwind across IPC.
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[profile.dev]
+# Dependencies optimised even in dev builds: an unoptimised MFT parse or fuzzy match is
+# so slow it makes the app feel broken while developing.
+opt-level = 0
+
+[profile.dev.package."*"]
+opt-level = 2
+
+# Benchmarks need release-grade codegen but debug symbols for profiling.
+[profile.bench]
+inherits = "release"
+strip = false
+debug = true

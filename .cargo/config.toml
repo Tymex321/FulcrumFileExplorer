@@ -1,0 +1,18 @@
+[env]
+# ts-rs reads this at compile time and writes generated TypeScript here. `relative = true`
+# resolves it against the workspace root, so `cargo test` from any crate lands bindings in
+# the same place. Regenerate with scripts/gen-bindings.sh.
+TS_RS_EXPORT_DIR = { value = "ui/src/bindings", relative = true }
+
+[alias]
+# Typecheck every #[cfg(windows)] path from macOS. This is the fast half of the Windows
+# feedback loop; CI is only needed for things that must actually link and run.
+#
+# Scoped to lib/bin targets on purpose: including --all-targets would also build dev
+# dependencies, and criterion pulls in a C shim that needs the real MSVC headers. Tests
+# and benches are checked natively on macOS and again on the windows-latest CI runner.
+# `src-tauri` is excluded because tauri-build needs the real Windows resource compiler
+# and cannot run from macOS. That crate holds almost no cfg(windows) code; the Windows
+# logic that matters lives in fx-index, fx-fs and fx-helper, which this covers. The
+# shell is compiled for Windows by the windows-latest CI job.
+win = "check -p fx-core -p fx-index -p fx-fs -p fx-helper --target x86_64-pc-windows-msvc"

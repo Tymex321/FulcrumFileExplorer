@@ -1,0 +1,11 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "beforeBuildCommand": "cargo build --release -p fx-helper && cargo test -p fx-core --quiet && npm run build"
+  },
+  "bundle": {
+    "resources": {
+      "../target/release/fx-helper.exe": "fx-helper.exe"
+    }
+  }
+}

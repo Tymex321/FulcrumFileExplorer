@@ -1,0 +1,9 @@
+[toolchain]
+# Tauri 2.12 needs 1.90+; MSRV is enforced via `rust-version` in Cargo.toml rather than
+# pinning an exact channel, so CI and local dev both track stable.
+channel = "stable"
+components = ["rustfmt", "clippy", "rust-src"]
+# The Windows target is installed on purpose: it lets `cargo check --target
+# x86_64-pc-windows-msvc` typecheck all the #[cfg(windows)] code from macOS without
+# needing a Windows machine or a CI round-trip (`cargo win`, see .cargo/config.toml).
+targets = ["x86_64-pc-windows-msvc"]

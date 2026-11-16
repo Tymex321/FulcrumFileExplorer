@@ -1,0 +1,36 @@
+[package]
+name = "fx-fs"
+description = "Directory listing, file operations with honest progress, thumbnails and icons."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# Versions are pinned in the root [workspace.dependencies]; never pin one here.
+[dependencies]
+fx-core.workspace = true
+parking_lot.workspace = true
+rayon.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+base64.workspace = true
+
+# The development twin sends to the macOS/Linux trash through the `trash` crate. Windows
+# uses IFileOperation directly so it can refuse to recycle on network shares instead of
+# silently deleting permanently.
+[target.'cfg(not(windows))'.dependencies]
+trash.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+png.workspace = true
+# Features are additive on top of the workspace set. WindowsAndMessaging supplies the
+# show-command and popup-menu types the shell calls need; it is requested here rather than
+# in the root manifest so other crates do not pay for it.
+windows = { workspace = true, features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Ole", "Win32_System_SystemServices"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

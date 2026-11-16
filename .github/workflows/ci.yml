@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same ref makes the older run pointless; cancel the older one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false # a Windows failure must not hide the macOS result, or vice versa
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash # Git Bash on Windows too, so one set of scripts serves both legs
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      # rust-toolchain.toml selects stable plus rustfmt/clippy/the Windows target.
+      - name: Install toolchain
+        run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Windows and macOS caches must not mix; the action keys on OS already, and
+          # the extra key keeps the typecheck-only artifacts out of the full-build cache.
+          key: check
+
+      - name: rustfmt
+        run: scripts/ci-run.sh "rustfmt" cargo fmt --all --check
+
+      # ts-rs writes ui/src/bindings as a side effect of fx-core's tests, and the UI
+      # imports them, so the UI cannot build until this has run.
+      - name: Generate TypeScript bindings
+        run: scripts/ci-run.sh "gen-bindings" cargo test -p fx-core --quiet
+
+      # Debug builds of src-tauri load the frontend from devUrl, so ui/dist is not needed to
+      # compile them; the UI is built here simply because it is cheap and fails fast.
+      - name: UI install
+        working-directory: ui
+        run: npm ci
+
+      - name: UI build
+        working-directory: ui
+        run: ../scripts/ci-run.sh "ui build" npm run build
+
+      - name: UI tests
+        working-directory: ui
+        run: ../scripts/ci-run.sh "ui tests" npx vitest run
+
+      - name: clippy
+        run: scripts/ci-run.sh "clippy" cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Rust tests
+        run: scripts/ci-run.sh "cargo test" cargo test --workspace
+
+      # The fast Windows feedback loop: typechecks every #[cfg(windows)] path in seconds
+      # on the Mac runner. The windows-latest leg is still the authority, since it links.
+      - name: Windows typecheck (cargo win)
+        if: runner.os == 'macOS'
+        run: scripts/ci-run.sh "cargo win" cargo win
+
+  bench:
+    name: benchmarks
+    runs-on: ubuntu-latest
+    # The number is published, never enforced: runner variance would make a gate flaky.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: rustup show active-toolchain
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bench
+
+      # Restoring the previous run's criterion directory is what lets criterion print
+      # its "vs previous run" change column; without it every run is a first run.
+      - name: Restore previous benchmark baseline
+        uses: actions/cache@v4
+        with:
+          path: criterion-home
+          key: criterion-${{ github.ref_name }}-${{ github.sha }}
+          restore-keys: |
+            criterion-${{ github.ref_name }}-
+            criterion-main-
+
+      - name: cargo bench
+        env:
+          CRITERION_HOME: ${{ github.workspace }}/criterion-home
+        run: cargo bench -p fx-index --bench query -- --noplot
+
+      - name: Publish results to the job summary
+        if: always()
+        env:
+          CRITERION_HOME: ${{ github.workspace }}/criterion-home
+        run: scripts/ci-bench-summary.sh 50 >> "$GITHUB_STEP_SUMMARY"

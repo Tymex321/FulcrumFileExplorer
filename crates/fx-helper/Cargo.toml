@@ -1,0 +1,26 @@
+[package]
+name = "fx-helper"
+description = "Elevated Windows service owning raw volume access for the MFT index."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "fx-helper"
+path = "src/main.rs"
+
+[dependencies]
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The index only exists where the helper does something: on Windows.
+fx-core.workspace = true
+fx-index.workspace = true
+windows.workspace = true
+windows-service.workspace = true
+
+[lints]
+workspace = true
