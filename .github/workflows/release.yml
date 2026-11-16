@@ -90,7 +90,7 @@ jobs:
           ls -l dist
 
       - name: Upload installer as a workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: fulcrum-windows-installer
           if-no-files-found: error
