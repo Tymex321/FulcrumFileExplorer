@@ -32,6 +32,7 @@ pub fn run() {
         .init();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             let dir = app
                 .path()
@@ -64,6 +65,8 @@ pub fn run() {
             commands::get_session,
             commands::set_session,
             commands::enable_instant_search,
+            commands::check_for_update,
+            commands::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("failed to build Fulcrum")

@@ -36,6 +36,7 @@ export type { ConflictPolicy } from "../bindings/ConflictPolicy";
 export type { Conflict } from "../bindings/Conflict";
 export type { Thumbnail } from "../bindings/Thumbnail";
 
+export type { UpdateInfo } from "../bindings/UpdateInfo";
 export type { IndexStats } from "../bindings/IndexStats";
 export type { IndexState } from "../bindings/IndexState";
 export type { ChangeEvent } from "../bindings/ChangeEvent";

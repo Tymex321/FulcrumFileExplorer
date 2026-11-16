@@ -53,6 +53,18 @@ Fulcrum then appears in the Start menu.
 > **"Windows protected your PC"?** The installer is not code-signed yet, so Microsoft
 > SmartScreen may warn about it. Click **More info**, then **Run anyway**.
 
+### Updating
+
+Fulcrum updates itself. A few seconds after it starts it checks GitHub for a newer version,
+and if there is one a card appears in the sidebar. Click **Update now** and Fulcrum
+downloads it, verifies it, installs it and restarts, keeping your settings and tabs. Windows
+asks for administrator approval, as it did for the first install.
+
+You can check at any time under **Settings → Updates**, or turn the startup check off there.
+The check only asks GitHub for a small version file; nothing is installed unless you click
+**Update now**. Updates are signed, and Fulcrum refuses any installer that is not signed with
+the project's key.
+
 To uninstall, use **Settings → Apps → Installed apps → Fulcrum → Uninstall**. This also
 removes the instant-search service if you turned it on.
 
@@ -96,7 +108,8 @@ The installer is written to
 
 Run every `cargo tauri` command from the repository root. The release config
 (`tauri.release.conf.json`) also builds the instant-search service (`fx-helper.exe`) and
-packages it with the app.
+packages it with the app. This produces a working installer; it is not signed for updates
+(see [Releasing](#releasing)), so only official releases update installed copies.
 
 ### Development
 
@@ -121,6 +134,36 @@ cargo bench -p fx-index         # search benchmarks on a synthetic 1M-file index
 The TypeScript types in `ui/src/bindings/` are generated from the Rust types. Every build
 regenerates them, and `scripts/gen-bindings.sh` does it on its own.
 
+## Releasing
+
+Releases are built by the **Release** workflow when a `v*` tag is pushed. It builds the
+installer on Windows, signs it for the updater, checks the signature against the key built
+into the app, and publishes the installer and `latest.json` (the file installed copies read
+to find updates) on the GitHub release.
+
+One-time setup:
+
+1. Generate a signing key pair. The private key never goes in the repository:
+   ```bash
+   cargo tauri signer generate -w ~/.fulcrum-signing/fulcrum-updater.key
+   ```
+2. Put the **public** key (the `.key.pub` file's contents) in `src-tauri/tauri.conf.json`
+   under `plugins.updater.pubkey`.
+3. In GitHub, open **Settings → Secrets and variables → Actions** and add the repository
+   secret `TAURI_SIGNING_PRIVATE_KEY` (the private key file's contents), plus
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` if you set a password.
+
+> **Keep the private key backed up.** Installed copies only trust updates signed with it. If
+> it is lost, existing installs cannot be updated and users would have to reinstall by hand.
+
+To release:
+
+1. Set the new version in `Cargo.toml` (`[workspace.package]`), `src-tauri/tauri.conf.json`,
+   and `ui/package.json` and `ui/package-lock.json`, and add a `## [x.y.z]` section to
+   `CHANGELOG.md`. The workflow checks that the tag, the version and the changelog agree.
+2. Commit, wait for CI to pass, then tag and push: `git tag -a vx.y.z -m "Fulcrum x.y.z"` and
+   `git push origin vx.y.z`.
+
 ## Project structure
 
 ```
@@ -131,7 +174,7 @@ crates/
   fx-helper/    the optional Windows service that reads the drive for instant search
 src-tauri/      the desktop app: window, commands, settings, installer configuration
 ui/             the interface: React, TypeScript, Vite and Tailwind CSS
-scripts/        development and CI helper scripts
+scripts/        development and CI helper scripts, and the release/update tooling
 .github/        CI, release workflow and Dependabot configuration
 ```
 

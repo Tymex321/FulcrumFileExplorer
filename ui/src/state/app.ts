@@ -16,6 +16,7 @@ import type {
   OpId,
   Progress,
   Settings,
+  UpdateInfo,
   VolumeInfo,
 } from "../api/types";
 import { dropOperation, dropRejection } from "../lib/dnd";
@@ -118,6 +119,12 @@ export interface AppState {
   index: IndexStats | null;
   /** The UAC prompt is up / the helper is being installed. */
   enabling: boolean;
+  /** A newer release, once the update check finds one. */
+  update: UpdateInfo | null;
+  /** What the updater is doing right now. */
+  updateBusy: "idle" | "checking" | "installing";
+  /** The user chose "Later" for this launch; the card stays hidden until next start. */
+  updateDismissed: boolean;
   palette: null | "files" | "commands";
   settingsOpen: null | "general" | "keys";
   previewOpen: boolean;
@@ -144,6 +151,9 @@ export const app = createStore<AppState>({
   volumes: [],
   index: null,
   enabling: false,
+  update: null,
+  updateBusy: "idle",
+  updateDismissed: false,
   palette: null,
   settingsOpen: null,
   previewOpen: false,
@@ -180,7 +190,50 @@ export async function init(): Promise<void> {
   applySettings(settings);
   patch({ ready: true, settings, volumes, index, workspace, places });
   watchIndex();
+  // Look for a newer version shortly after start, off the critical path and silently.
+  if (settings.behavior.check_for_updates && hasTauri()) {
+    setTimeout(() => void checkForUpdate(false), UPDATE_CHECK_DELAY_MS);
+  }
 }
+
+/* ───────────────────────────── Updates ───────────────────────────── */
+
+const UPDATE_CHECK_DELAY_MS = 4000;
+
+/**
+ * Looks for a newer release. The startup check (`manual = false`) stays silent when
+ * there is nothing new or the network is down; a check the user asked for always answers.
+ */
+export async function checkForUpdate(manual: boolean): Promise<void> {
+  if (app.get().updateBusy !== "idle") return;
+  patch({ updateBusy: "checking" });
+  try {
+    const api = await getApi();
+    const info = await api.checkForUpdate();
+    patch({ update: info, updateDismissed: false });
+    if (manual && !info) notify("You're on the latest version.");
+    if (manual && info) notify(`Fulcrum ${info.version} is available.`);
+  } catch (e) {
+    if (manual) notify(`Could not check for updates (${toFxError(e).kind}).`, "error");
+  } finally {
+    patch({ updateBusy: "idle" });
+  }
+}
+
+/** Downloads and installs the pending update. On success the installer restarts the app. */
+export async function installUpdate(): Promise<void> {
+  if (app.get().updateBusy === "installing") return;
+  patch({ updateBusy: "installing" });
+  try {
+    const api = await getApi();
+    await api.installUpdate();
+  } catch (e) {
+    patch({ updateBusy: "idle" });
+    notify(`Update failed (${toFxError(e).kind}). Your current version is unchanged.`, "error");
+  }
+}
+
+export const dismissUpdate = () => patch({ updateDismissed: true });
 
 let indexTimer: ReturnType<typeof setTimeout> | null = null;
 

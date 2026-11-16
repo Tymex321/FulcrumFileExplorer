@@ -43,6 +43,7 @@ export const COMMANDS: CommandDef[] = [
   { id: "app.keybindings", title: "Edit keyboard shortcuts", category: "General", keys: ["Ctrl+K"] },
   { id: "ui.cancel", title: "Cancel / clear", category: "General", keys: ["Escape"], allowInInput: true, hidden: true },
   { id: "index.enable", title: "Enable instant search", category: "General", keys: [] },
+  { id: "update.check", title: "Check for updates", category: "General", keys: [] },
 
   // Search
   { id: "search.focus", title: "Search in this folder", category: "Search", keys: ["Ctrl+F", "F3"], allowInInput: true },

@@ -25,6 +25,7 @@ import type {
   SessionState,
   Settings,
   Thumbnail,
+  UpdateInfo,
   VolumeInfo,
 } from "./types";
 
@@ -73,6 +74,9 @@ export const tauriApi: FulcrumApi = {
 
   icon: (path, sizePx) => invoke<Thumbnail>("icon", { path, sizePx }),
   thumbnail: (path, sizePx) => invoke<Thumbnail>("thumbnail", { path, sizePx }),
+
+  checkForUpdate: () => invoke<UpdateInfo | null>("check_for_update"),
+  installUpdate: () => invoke<void>("install_update"),
 
   getSettings: () => invoke<Settings>("get_settings"),
   setSettings: (settings: Settings) => invoke<void>("set_settings", { settings }),

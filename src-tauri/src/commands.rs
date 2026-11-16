@@ -15,7 +15,7 @@ use std::time::Duration;
 
 use fx_core::{
     FileEntry, FxError, IndexStats, ListOptions, ListSummary, OpControl, OpId, Progress, Query,
-    QuerySummary, SearchHit, SessionState, Settings, VolumeInfo,
+    QuerySummary, SearchHit, SessionState, Settings, UpdateInfo, VolumeInfo,
 };
 use tauri::ipc::Channel;
 use tauri::State;
@@ -233,4 +233,52 @@ pub async fn enable_instant_search(state: State<'_, AppState>) -> Result<(), FxE
         Ok(())
     })
     .await
+}
+
+/// Looks for a newer release. `None` means this is the latest version.
+///
+/// Errors (offline, GitHub unreachable, a bad signature) are returned to the UI, which
+/// stays quiet for the automatic startup check and reports them for a manual one.
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<Option<UpdateInfo>, FxError> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app
+        .updater()
+        .map_err(|e| FxError::Other(format!("updater unavailable: {e}")))?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| FxError::Other(format!("update check failed: {e}")))?;
+    Ok(update.map(|u| UpdateInfo {
+        version: u.version,
+        current_version: u.current_version,
+        notes: u.body,
+    }))
+}
+
+/// Downloads and installs the newest release, then the installer restarts the app.
+///
+/// The release is checked again rather than trusted from an earlier call, and the download
+/// is verified against the signing key built into the app before anything is run. Settings
+/// and the session are written to disk first, because on Windows the process exits as soon
+/// as the installer starts.
+#[tauri::command]
+pub async fn install_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), FxError> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app
+        .updater()
+        .map_err(|e| FxError::Other(format!("updater unavailable: {e}")))?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| FxError::Other(format!("update check failed: {e}")))?
+        .ok_or_else(|| FxError::NotFound("no update is available".into()))?;
+    state.flush();
+    update
+        .download_and_install(|_, _| {}, || {})
+        .await
+        .map_err(|e| FxError::Other(format!("update failed: {e}")))
 }

@@ -20,6 +20,7 @@ import type {
   SessionState,
   Settings,
   Thumbnail,
+  UpdateInfo,
   VolumeInfo,
 } from "./types";
 
@@ -60,6 +61,11 @@ export interface FulcrumApi {
    * degrades to metadata when a backend does not provide it.
    */
   readText?(path: string, maxBytes: number): Promise<string>;
+
+  /** Looks for a newer release. `null` means this is the latest version. */
+  checkForUpdate(): Promise<UpdateInfo | null>;
+  /** Downloads, verifies and installs the newest release; the installer restarts the app. */
+  installUpdate(): Promise<void>;
 
   getSettings(): Promise<Settings>;
   setSettings(settings: Settings): Promise<void>;

@@ -517,6 +517,13 @@ export const mockApi: FulcrumApi = {
     };
   },
 
+  /** The mock is always "up to date"; tests override this to exercise the update flow. */
+  async checkForUpdate() {
+    return null;
+  },
+
+  async installUpdate(): Promise<void> {},
+
   async stat(path): Promise<FileEntry> {
     const e = lookup(path);
     if (!e) fail("NotFound", `${path} does not exist`);
@@ -872,6 +879,7 @@ function defaultSettings(): Settings {
       confirm_delete: true,
       skip_recycle_bin: false,
       restore_session: true,
+      check_for_updates: true,
       default_view: "Details",
       list: {
         show_hidden: false,

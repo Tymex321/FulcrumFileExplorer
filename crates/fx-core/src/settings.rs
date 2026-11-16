@@ -120,6 +120,9 @@ pub struct BehaviorSettings {
     pub skip_recycle_bin: bool,
     /// Restore tabs and panes from the previous session on launch.
     pub restore_session: bool,
+    /// Look for a newer Fulcrum on startup and offer to install it. The check contacts
+    /// GitHub; nothing is downloaded or installed without the user choosing to.
+    pub check_for_updates: bool,
     pub default_view: ViewMode,
     pub list: ListOptions,
     pub sort: Sort,
@@ -132,6 +135,7 @@ impl Default for BehaviorSettings {
             confirm_delete: true,
             skip_recycle_bin: false,
             restore_session: true,
+            check_for_updates: true,
             default_view: ViewMode::default(),
             list: ListOptions::default(),
             sort: Sort::default(),
@@ -174,4 +178,32 @@ pub struct SessionState {
     pub panes: Vec<Vec<TabState>>,
     pub active_pane: u32,
     pub active_tab: Vec<u32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_saved_before_the_update_check_existed_still_load_with_it_on() {
+        // An older settings.json has no `check_for_updates`; it must not reset the rest.
+        let old = r#"{"behavior":{"single_click_open":true,"restore_session":false}}"#;
+        let s: Settings = serde_json::from_str(old).unwrap();
+        assert!(s.behavior.single_click_open);
+        assert!(!s.behavior.restore_session);
+        assert!(s.behavior.check_for_updates);
+    }
+
+    #[test]
+    fn the_update_check_can_be_turned_off_and_stays_off() {
+        let mut s = Settings::default();
+        s.behavior.check_for_updates = false;
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert!(!back.behavior.check_for_updates);
+    }
+
+    #[test]
+    fn acrylic_is_off_by_default() {
+        assert!(!Settings::default().appearance.acrylic);
+    }
 }

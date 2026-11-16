@@ -12,6 +12,7 @@ import {
   copyPathToClipboard,
   copySelection,
   deleteSelection,
+  checkForUpdate,
   enableInstantSearch,
   focusSearch,
   goUp,
@@ -140,6 +141,7 @@ function useGlobalCommands() {
     "app.settings": () => openSettings("general"),
     "app.keybindings": () => openSettings("keys"),
     "index.enable": () => void enableInstantSearch(),
+    "update.check": () => void checkForUpdate(true),
 
     "search.focus": () => focusSearch(),
     "search.everywhere": () => focusSearch(activePane(), true),

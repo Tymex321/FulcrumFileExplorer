@@ -42,6 +42,7 @@ pub mod index;
 pub mod query;
 pub mod settings;
 pub mod sink;
+pub mod update;
 
 pub use entry::{
     Attributes, EntryId, EntryKind, FileEntry, Filesystem, Millis, VolumeId, VolumeInfo,
@@ -61,6 +62,7 @@ pub use settings::{
     Settings, TabState, ViewMode,
 };
 pub use sink::{BatchSink, CollectSink, NullSink, ProgressSink};
+pub use update::UpdateInfo;
 
 /// Named pipe the elevated helper listens on.
 ///

@@ -14,7 +14,9 @@ import { basename, isWithin } from "../lib/path";
 import * as W from "../lib/workspace";
 import {
   dropPaths,
+  dismissUpdate,
   enableInstantSearch,
+  installUpdate,
   movePin,
   navigate,
   openPalette,
@@ -214,6 +216,7 @@ export function Sidebar() {
       ))}
 
       <div className="mt-auto" />
+      <UpdateCard />
       <IndexCard />
 
       <Popover anchor={menu ? { x: menu.x, y: menu.y } : null} onClose={() => setMenu(null)}>
@@ -314,6 +317,48 @@ function DriveRow({ v, active }: { v: VolumeInfo; active: boolean }) {
         </div>
       )}
     </button>
+  );
+}
+
+/** Offers a newer version. Installing is always the user's choice; "Later" hides it until next launch. */
+function UpdateCard() {
+  const update = useApp((s) => s.update);
+  const busy = useApp((s) => s.updateBusy);
+  const dismissed = useApp((s) => s.updateDismissed);
+  if (!update || (dismissed && busy !== "installing")) return null;
+
+  if (busy === "installing") {
+    return (
+      <div className="mx-3 mt-3 rounded-lg px-3 py-2.5 text-[11px] text-ink-muted shadow-[inset_0_0_0_1px_var(--color-hairline)]" role="status">
+        <div className="flex items-center gap-2">
+          <I.Download size={13} className="text-accent-300" />
+          <span>Installing {update.version}… Fulcrum will restart.</span>
+        </div>
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-base">
+          <div className="bar-indeterminate h-full w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-3 mt-3 overflow-hidden rounded-lg bg-gradient-to-b from-[color-mix(in_oklab,var(--color-accent-700)_22%,transparent)] to-transparent p-3 shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--color-accent-500)_35%,transparent)]">
+      <div className="flex items-center gap-2 text-xs font-medium text-ink">
+        <I.Download size={14} className="text-accent-300" />
+        Fulcrum {update.version} is available
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-ink-muted">
+        You have {update.current_version}. Updating keeps your settings and restarts Fulcrum.
+      </p>
+      <div className="mt-2.5 flex gap-2">
+        <button className="btn btn-primary h-7 flex-1 justify-center text-[11px]" onClick={() => void installUpdate()}>
+          Update now
+        </button>
+        <button className="btn h-7 px-3 text-[11px]" onClick={dismissUpdate}>
+          Later
+        </button>
+      </div>
+    </div>
   );
 }
 

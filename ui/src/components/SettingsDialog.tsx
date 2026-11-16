@@ -9,7 +9,8 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { Accent, Density, Settings, ViewMode } from "../api/types";
 import { type CommandDef, findConflicts, normalizeChord, setBinding } from "../lib/keymap";
 import { formatSize } from "../lib/format";
-import { enableInstantSearch, openSettings, updateSettings, useApp } from "../state/app";
+import { hasTauri } from "../api";
+import { checkForUpdate, enableInstantSearch, openSettings, updateSettings, useApp } from "../state/app";
 import { COMMANDS, keys, useCommand } from "../state/commands";
 import { I } from "./Icons";
 import { Chord } from "./Kbd";
@@ -113,11 +114,42 @@ function General({ s }: { s: Settings }) {
         <Toggle label="Restore tabs on launch" value={s.behavior.restore_session} onChange={(restore_session) => behavior({ restore_session })} />
       </Group>
 
+      <Group title="Updates">
+        <UpdateRow />
+        <Toggle
+          label="Check for updates on startup"
+          hint="Fulcrum asks GitHub whether a newer version exists. Nothing is installed unless you choose to."
+          value={s.behavior.check_for_updates}
+          onChange={(check_for_updates) => behavior({ check_for_updates })}
+        />
+      </Group>
+
       <Group title="Deleting">
         <Toggle label="Ask before deleting" value={s.behavior.confirm_delete} onChange={(confirm_delete) => behavior({ confirm_delete })} />
         <Toggle label="Delete permanently instead of using the Recycle Bin" hint="Off by default. Permanent deletes always ask first." value={s.behavior.skip_recycle_bin} onChange={(skip_recycle_bin) => behavior({ skip_recycle_bin })} />
       </Group>
     </div>
+  );
+}
+
+/** The running version, and a button that checks for a newer one on demand. */
+function UpdateRow() {
+  const busy = useApp((s) => s.updateBusy);
+  const update = useApp((s) => s.update);
+  const [version, setVersion] = useState<string | null>(null);
+  useEffect(() => {
+    if (!hasTauri()) return;
+    void import("@tauri-apps/api/app").then((m) => m.getVersion()).then(setVersion).catch(() => {});
+  }, []);
+  return (
+    <Row
+      label={version ? `Fulcrum ${version}` : "Fulcrum"}
+      hint={update ? `Version ${update.version} is available. Use the card in the sidebar to install it.` : "Check whether a newer version is available."}
+    >
+      <button className="btn h-7 px-3 text-[11px]" disabled={busy !== "idle"} onClick={() => void checkForUpdate(true)}>
+        {busy === "checking" ? "Checking…" : "Check for updates"}
+      </button>
+    </Row>
   );
 }
 

@@ -53,13 +53,33 @@ jobs:
             exit 1
           fi
 
+      # Updates are signed so installed copies only accept installers from this project.
+      # The private key lives in the repository secrets (Settings -> Secrets and variables
+      # -> Actions); see "Releasing" in the README.
+      - name: Check the update signing key is configured
+        env:
+          KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "::error::Repository secret TAURI_SIGNING_PRIVATE_KEY is not set. Without it the build cannot produce signed update files. See 'Releasing' in the README."
+            exit 1
+          fi
+
       - name: UI install
         working-directory: ui
         run: npm ci
 
-      # The release overlay builds fx-helper.exe first and bundles it beside the app.
+      # The release overlay builds fx-helper.exe first and bundles it beside the app; the
+      # updater overlay makes Tauri sign the installer, which writes the `.sig` file.
       - name: Build installer
-        run: cargo tauri build --ci --config src-tauri/tauri.release.conf.json --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: >
+          cargo tauri build --ci
+          --config src-tauri/tauri.release.conf.json
+          --config src-tauri/tauri.updater.conf.json
+          --bundles nsis
 
       # The embedded manifest is plain XML inside the exe, so a byte grep is enough to
       # prove the app never forces elevation (privilege lives in fx-helper only).
@@ -87,6 +107,25 @@ jobs:
             grep -qi "$f" <<<"$listing" || { echo "::error::$f is missing from the installer"; exit 1; }
           done
           (cd dist && sha256sum "$(basename "$out")" > "$(basename "$out").sha256")
+
+          # The update signature must verify against the key built into the app, or every
+          # installed copy would reject the update this release publishes.
+          sig="${built[0]}.sig"
+          test -f "$sig" || { echo "::error::$sig was not produced; is createUpdaterArtifacts on?"; exit 1; }
+          node scripts/verify-update-signature.mjs "$out" "$sig" src-tauri/tauri.conf.json
+
+          # The release notes are the matching section of CHANGELOG.md, shown in the release
+          # and carried in the update manifest.
+          awk -v v="${{ steps.version.outputs.version }}" '
+            index($0, "## [" v "]") == 1 { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${{ steps.version.outputs.version }}"; exit 1; }
+
+          # latest.json is what installed copies read to learn that an update exists.
+          node scripts/make-update-manifest.mjs "${{ steps.version.outputs.version }}" \
+            "$(basename "$out")" "$sig" notes.md "${{ github.repository }}" > dist/latest.json
           ls -l dist
 
       - name: Upload installer as a workflow artifact
@@ -106,14 +145,20 @@ jobs:
             echo "::error::release $TAG already exists; refusing to overwrite it"
             exit 1
           fi
-          # The release notes are the matching section of CHANGELOG.md.
-          awk -v v="${TAG#v}" '
-            index($0, "## [" v "]") == 1 { on = 1; next }
-            on && /^## \[/ { exit }
-            on { print }
-          ' CHANGELOG.md > notes.md
-          test -s notes.md || { echo "::error::CHANGELOG.md has no section for ${TAG#v}"; exit 1; }
           gh release create "$TAG" dist/* \
             --title "Fulcrum $TAG" \
             --notes-file notes.md \
             --verify-tag
+
+      # Installed copies fetch this exact URL, so make sure it now serves this version.
+      - name: Check the update manifest is live
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          want="${GITHUB_REF_NAME#v}"
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -fsSL "https://github.com/${{ github.repository }}/releases/latest/download/latest.json" | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version" || true)
+            [ "$got" = "$want" ] && { echo "latest.json serves $got"; exit 0; }
+            sleep 10
+          done
+          echo "::error::latest.json serves '$got', expected '$want'"
+          exit 1

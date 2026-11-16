@@ -4,6 +4,36 @@ All notable changes to Fulcrum are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-11-16
+
+### Added
+
+- **In-app updates.** Fulcrum checks for a newer version a few seconds after it starts and
+  offers it in the sidebar. **Update now** downloads the new version, checks its signature
+  against the key built into the app, installs it and restarts Fulcrum. Your settings and
+  tabs are kept. Use **Settings → Updates → Check for updates** (or the command palette) to
+  check on demand, or turn the startup check off there.
+
+### Changed
+
+- **"Go to file" (Ctrl+P) shows only accurate matches.** It now looks for your text
+  literally and lists those files, best match first: exact name, then names that start with
+  your text, then word starts. If nothing matches literally it falls back to close
+  (typo-tolerant) matches only, so scattered letters no longer pad the list with unrelated
+  files. Previously the search could also list the *worst* matches first.
+
+### Fixed
+
+- Results that arrived after the search call returned were not drawn until you edited the
+  query, leaving "No matches" next to a non-zero match count.
+- Moving the window was slow and laggy because of a blur effect Windows re-renders on every
+  frame; it is now off.
+
+### Upgrading from 1.0.0
+
+Version 1.0.0 has no updater, so install 1.0.1 once by hand. From then on Fulcrum updates
+itself.
+
 ## [1.0.0] - 2026-11-16
 
 The first public release of Fulcrum, a fast file explorer for Windows.
