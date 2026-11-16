@@ -493,7 +493,9 @@ export const mockApi: FulcrumApi = {
     }
 
     if (query.sort.key === "Relevance" || query.mode === "Fuzzy") {
-      matches.sort((a, b) => b.score - a.score || collator.compare(a.entry.name, b.entry.name));
+      // Like the real index: ascending relevance is best first, and `desc` reverses it.
+      const d = query.sort.key === "Relevance" && query.sort.desc ? -1 : 1;
+      matches.sort((a, b) => d * (b.score - a.score) || collator.compare(a.entry.name, b.entry.name));
     } else if (query.sort.key === "Path") {
       const d = query.sort.desc ? -1 : 1;
       matches.sort((a, b) => collator.compare(a.path, b.path) * d);

@@ -5,6 +5,7 @@
  * UI-owned data (a few dozen titles), not a backend result set. File search in the
  * palette always goes to Rust and renders its `match_ranges`.
  */
+import type { SearchHit } from "../api/types";
 import type { CommandDef } from "./keymap";
 
 export interface Ranked {
@@ -62,4 +63,51 @@ export function rankCommands(query: string, commands: readonly CommandDef[], rec
   }
   out.sort((a, b) => b.score - a.score || a.cmd.title.localeCompare(b.cmd.title));
   return out;
+}
+
+/* ───────────────────────────── File results ───────────────────────────── */
+
+const isWordChar = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}]/u.test(c);
+
+/**
+ * Orders literal (substring) matches so the one the user means comes first: the exact file
+ * name, then the name without its extension, then names that start with the query, then
+ * matches at the start of a word, then anywhere. Shorter names win within a tier, since a
+ * query is a larger share of them.
+ */
+export function rankFileHits(hits: readonly SearchHit[], query: string): SearchHit[] {
+  const q = query.trim().toLowerCase();
+  const needle = q.split(/\s+/)[0] ?? q;
+  const tier = (name: string): number => {
+    const n = name.toLowerCase();
+    const dot = n.lastIndexOf(".");
+    const stem = dot > 0 ? n.slice(0, dot) : n;
+    if (n === q) return 0;
+    if (stem === q) return 1;
+    if (n.startsWith(needle)) return 2;
+    for (let i = n.indexOf(needle); i >= 0; i = n.indexOf(needle, i + 1)) {
+      if (!isWordChar(n[i - 1])) return 3;
+    }
+    return 4;
+  };
+  return hits
+    .map((hit) => ({ hit, tier: tier(hit.entry.name) }))
+    .sort((a, b) => a.tier - b.tier || a.hit.entry.name.length - b.hit.entry.name.length || a.hit.entry.name.localeCompare(b.hit.entry.name) || a.hit.path.length - b.hit.path.length)
+    .map((x) => x.hit);
+}
+
+/** Fuzzy fallback needs at least this many characters, or any two letters would "match". */
+export const MIN_FUZZY_QUERY = 4;
+/** Contiguous pieces a close fuzzy match may be split into (one typo makes two). */
+const MAX_MATCH_RUNS = 2;
+
+/**
+ * Whether a fuzzy hit is a *close* match: the query's letters land in at most two
+ * contiguous pieces of the name, as with "zadnie" against "zadanie.txt". Letters scattered
+ * across a long name ("MissionModule_zSubmodule_AddSpecialWorldIndicator…") do not count.
+ * `match_ranges` is a flat list of [start, end] pairs, one pair per contiguous piece.
+ */
+export function isCloseMatch(hit: SearchHit): boolean {
+  const runs = hit.match_ranges.length / 2;
+  return runs > 0 && runs <= MAX_MATCH_RUNS;
 }

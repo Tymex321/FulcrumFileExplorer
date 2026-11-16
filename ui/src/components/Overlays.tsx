@@ -8,7 +8,7 @@ import { getApi } from "../api";
 import type { QuerySummary, SearchHit } from "../api/types";
 import { typeInfo } from "../lib/fileTypes";
 import { highlightSegments } from "../lib/highlight";
-import { rankCommands } from "../lib/palette";
+import { isCloseMatch, MIN_FUZZY_QUERY, rankCommands, rankFileHits } from "../lib/palette";
 import { parent } from "../lib/path";
 import { askConfirm, navigate, openMenu, openPalette, revealInPane, runtimeOf, useApp } from "../state/app";
 import { COMMANDS, keys, useCommand, useCommands } from "../state/commands";
@@ -34,6 +34,11 @@ function pushRecent(id: string) {
   }
 }
 
+/** Literal matches fetched (then ranked in the UI), and how many the list shows. */
+const FETCH_LIMIT = 500;
+const SHOWN = 60;
+const FUZZY_FETCH_LIMIT = 200;
+
 export function CommandPalette() {
   const mode = useApp((s) => s.palette);
   if (!mode) return null;
@@ -48,6 +53,8 @@ function PaletteDialog({ initial }: { initial: "files" | "commands" }) {
   const [active, setActive] = useState(0);
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [summary, setSummary] = useState<QuerySummary | null>(null);
+  /** The shown files are close (typo-tolerant) matches because nothing matched literally. */
+  const [approximate, setApproximate] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   useSyncExternalStore(keys.subscribe, () => keys.getKeymap());
@@ -63,47 +70,78 @@ function PaletteDialog({ initial }: { initial: "files" | "commands" }) {
   }, []);
 
   // File search goes to Rust; stale responses are discarded by generation.
+  //
+  // Accuracy first: look for the text literally, and show only those files. Fuzzy matching
+  // is a fallback for typos, used only when nothing matches literally, and even then only
+  // close matches are kept, so scattered letters never pad the list with unrelated files.
   const gen = useRef(0);
   useEffect(() => {
     if (isCommands || !query) {
       setHits([]);
       setSummary(null);
+      setApproximate(false);
       return;
     }
     const g = ++gen.current;
     const t = setTimeout(async () => {
       const api = await getApi();
-      const got: SearchHit[] = [];
+      const base = {
+        text: query,
+        case: "Smart" as const,
+        scope: "All" as const,
+        filters: { kinds: [], extensions: [], size: null, modified: null, created: null, include_hidden: false, include_system: false },
+        offset: 0,
+        match_full_path: false,
+      };
       try {
+        // Batches travel on a separate channel from the call's own response and can land
+        // after it resolves, so each one must update state itself. Copying matters: React
+        // skips the render if handed the same array it already holds.
+        const exact: SearchHit[] = [];
         const sum = await api.search(
-          {
-            text: query,
-            mode: "Fuzzy",
-            case: "Smart",
-            scope: "All",
-            filters: { kinds: [], extensions: [], size: null, modified: null, created: null, include_hidden: false, include_system: false },
-            sort: { key: "Relevance", desc: true, dirs_first: false },
-            limit: 60,
-            offset: 0,
-            match_full_path: false,
-          },
-          // Batches travel on a separate channel from the call's own response and can land
-          // after it resolves, so each one must update state itself. Copying matters:
-          // React skips the render if handed the same array it already holds.
+          { ...base, mode: "Substring", sort: { key: "Name", desc: false, dirs_first: false }, limit: FETCH_LIMIT },
           (batch) => {
             if (g !== gen.current) return;
-            got.push(...batch);
-            setHits(got.slice());
+            exact.push(...batch);
+            setHits(rankFileHits(exact, query).slice(0, SHOWN));
           },
         );
         if (g !== gen.current) return;
-        setHits(got.slice());
-        setSummary(sum);
+        if (sum.total_matched > 0) {
+          setHits(rankFileHits(exact, query).slice(0, SHOWN));
+          setSummary(sum);
+          setApproximate(false);
+          setActive(0);
+          return;
+        }
+
+        // Nothing literal. Try a typo-tolerant search, keeping only tight matches.
+        if (query.length < MIN_FUZZY_QUERY) {
+          setHits([]);
+          setSummary(sum);
+          setApproximate(false);
+          return;
+        }
+        const fuzzy: SearchHit[] = [];
+        const fsum = await api.search(
+          { ...base, mode: "Fuzzy", sort: { key: "Relevance", desc: false, dirs_first: false }, limit: FUZZY_FETCH_LIMIT },
+          (batch) => {
+            if (g !== gen.current) return;
+            fuzzy.push(...batch);
+            setHits(fuzzy.filter(isCloseMatch).slice(0, SHOWN));
+          },
+        );
+        if (g !== gen.current) return;
+        const close = fuzzy.filter(isCloseMatch);
+        setHits(close.slice(0, SHOWN));
+        setSummary({ ...fsum, total_matched: close.length });
+        setApproximate(true);
         setActive(0);
       } catch {
         if (g === gen.current) {
           setHits([]);
           setSummary(null); // never show the previous query's match count beside an empty list
+          setApproximate(false);
         }
       }
     }, 40);
@@ -186,8 +224,9 @@ function PaletteDialog({ initial }: { initial: "files" | "commands" }) {
         {!isCommands && summary && (
           <div className="flex items-center gap-2 border-t border-hairline px-3.5 py-2 text-[11px] text-ink-faint">
             <span className="tabular-nums">
-              {summary.total_matched.toLocaleString()} matches · {(summary.elapsed_micros / 1000).toFixed(1)} ms
+              {summary.total_matched.toLocaleString()} {approximate ? "close matches" : "matches"} · {(summary.elapsed_micros / 1000).toFixed(1)} ms
             </span>
+            {approximate && <span className="text-ink-faint">· nothing matched exactly</span>}
             {summary.degraded && (
               <span className="ml-auto flex items-center gap-1 text-warn">
                 <I.Warn size={12} /> Partial: instant search is off

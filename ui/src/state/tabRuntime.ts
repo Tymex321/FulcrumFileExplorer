@@ -95,7 +95,8 @@ export function queryFor(p: SearchParams, dir: string, sort: Sort, showHidden: b
     scope: p.scope === "here" ? { Subtree: dir } : "All",
     filters: filtersFor(p, showHidden),
     // Name sort is useless for a search; relevance is what people expect by default.
-    sort: sort.key === "Name" && p.mode === "Fuzzy" ? { ...sort, key: "Relevance" } : sort,
+    // Ascending relevance is best first, so it must not inherit a descending name sort.
+    sort: sort.key === "Name" && p.mode === "Fuzzy" ? { ...sort, key: "Relevance", desc: false } : sort,
     limit,
     offset,
     match_full_path: false,

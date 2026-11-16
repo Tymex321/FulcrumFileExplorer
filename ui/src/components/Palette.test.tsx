@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setApi } from "../api";
 import { __resetMock, mockApi } from "../api/mock";
-import type { SearchHit } from "../api/types";
+import type { Query, QuerySummary, SearchHit } from "../api/types";
 import { openPalette } from "../state/app";
 import { CommandPalette } from "./Overlays";
 
@@ -97,5 +97,73 @@ describe("command palette file search", () => {
     await until(() => !/\d+ matches ·/.test(body()));
     expect(optionCount()).toBe(0);
     expect(body()).not.toMatch(/\d+ matches ·/);
+  });
+
+  describe("accuracy", () => {
+    const summary = (n: number): QuerySummary => ({ returned: n, total_matched: n, elapsed_micros: 1000, truncated: false, degraded: false });
+    const named = (name: string, ranges: number[] = []): SearchHit => ({
+      entry: { ...(mockApi_hit.entry), name },
+      volume: "D",
+      path: `D:\\Data\\${name}`,
+      score: 1,
+      match_ranges: ranges,
+    });
+    let mockApi_hit: SearchHit;
+    let modes: string[] = [];
+
+    /** A backend that answers Substring and Fuzzy queries from fixed lists. */
+    const fake = (literal: SearchHit[], fuzzy: SearchHit[]) => {
+      modes = [];
+      setApi({
+        ...mockApi,
+        search: async (q: Query, onBatch) => {
+          modes.push(q.mode);
+          const list = q.mode === "Substring" ? literal : fuzzy;
+          onBatch(list);
+          return summary(list.length);
+        },
+      });
+    };
+
+    beforeAll(async () => {
+      let first: SearchHit | undefined;
+      await mockApi.search({ text: "users", mode: "Substring", case: "Smart", scope: "All", filters: { kinds: [], extensions: [], size: null, modified: null, created: null, include_hidden: false, include_system: false }, sort: { key: "Name", desc: false, dirs_first: false }, limit: 1, offset: 0, match_full_path: false }, (b) => {
+        first ??= b[0];
+      });
+      if (!first) throw new Error("mock has no sample hit");
+      mockApi_hit = first;
+    });
+
+    const names = () => [...document.querySelectorAll("[role=option]")].map((o) => o.textContent ?? "");
+
+    it("shows only literal matches, best first, and never asks for fuzzy ones", async () => {
+      fake([named("MissionModule_zadanie_Base.uasset", [14, 21]), named("zadanie.txt", [0, 7]), named("zadanie_final.docx", [0, 7])], [named("scattered_junk.dds", [1, 2, 4, 5, 8, 9])]);
+      await type("");
+      await type("zadanie");
+      await until(() => names().length === 3);
+      expect(names().map((n) => n.split("D:")[0])).toEqual(["zadanie.txt", "zadanie_final.docx", "MissionModule_zadanie_Base.uasset"]);
+      expect(modes).not.toContain("Fuzzy");
+      expect(body()).toMatch(/3 matches/);
+    });
+
+    it("falls back to fuzzy only when nothing matches literally, keeping close matches only", async () => {
+      fake([], [named("zadanie.txt", [0, 3, 4, 7]), named("MissionModule_zSubmodule_AddSpecial.uasset", [8, 9, 15, 16, 20, 21, 24, 25, 28, 29, 31, 32])]);
+      await type("zadnie");
+      await until(() => /close matches/.test(body()));
+      expect(names().length).toBe(1);
+      expect(names()[0]).toContain("zadanie.txt");
+      expect(body()).toMatch(/1 close matches/);
+      expect(body()).toContain("nothing matched exactly");
+      expect(modes).toEqual(["Substring", "Fuzzy"]);
+    });
+
+    it("does not fall back to fuzzy for very short queries", async () => {
+      fake([], [named("zadanie.txt", [0, 1])]);
+      await type("za");
+      await until(() => modes.length > 0);
+      await settle(120);
+      expect(modes).toEqual(["Substring"]);
+      expect(names().length).toBe(0);
+    });
   });
 });
