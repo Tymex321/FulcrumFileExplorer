@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/fx-core", "crates/fx-index", "crates/fx-fs", "crates/fx-helper", "src-tauri"]
 
 [workspace.package]
-version = "1.0.1"
+version = "1.0.0"
 edition = "2021"
 rust-version = "1.90"
 license = "MIT"
