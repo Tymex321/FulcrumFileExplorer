@@ -27,7 +27,7 @@ jobs:
       run:
         shell: bash # Git Bash on Windows too, so one set of scripts serves both legs
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -85,7 +85,7 @@ jobs:
     # The number is published, never enforced: runner variance would make a gate flaky.
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - run: rustup show active-toolchain
 
